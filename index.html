@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>إدارة الحضور - إعدادية النجدين</title>
+    <title>إدارة الحضور</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #eef2f3; }
         .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
@@ -23,11 +23,13 @@
             <option value="حاضر">حاضر</option>
             <option value="متأخر">متأخر</option>
             <option value="مجاز">مجاز</option>
+            <option value="غائب">غائب</option>
         </select>
+        <input type="time" id="customTime" value="08:00">
         <button onclick="registerAttendance()">تسجيل</button>
     </div>
     <table>
-        <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th></tr></thead>
+        <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>إجراء</th></tr></thead>
         <tbody id="attendanceTable"></tbody>
     </table>
 </div>
@@ -43,7 +45,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, collection, addDoc, onSnapshot, query, orderBy, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, onSnapshot, query, orderBy, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDHcLPo-oAQmJr4O6M0NEAN32eAvUBo9LU",
@@ -60,30 +62,32 @@
     window.registerAttendance = async () => {
         const code = document.getElementById('empCode').value;
         const status = document.getElementById('status').value;
+        const time = document.getElementById('customTime').value;
         const empSnap = await getDoc(doc(db, "employees", code));
         if (!empSnap.exists()) { alert("الكود غير موجود!"); return; }
         await addDoc(collection(db, "attendance"), {
             name: empSnap.data().name, status: status, date: new Date().toLocaleDateString('ar-EG'),
-            time: new Date().toLocaleTimeString('ar-EG'), timestamp: new Date()
+            time: time, timestamp: new Date()
         });
-        alert("تم تسجيل: " + empSnap.data().name);
     };
 
     window.addEmployee = async () => {
         const code = document.getElementById('newEmpCode').value;
         const name = document.getElementById('newEmpName').value;
-        if (!code || !name) { alert("يرجى إدخال الكود والاسم!"); return; }
         await setDoc(doc(db, "employees", code), { name: name });
-        alert("تم حفظ الموظف: " + name);
-        document.getElementById('newEmpCode').value = "";
-        document.getElementById('newEmpName').value = "";
+        alert("تم الحفظ");
+    };
+
+    window.deleteRecord = async (id) => {
+        await deleteDoc(doc(db, "attendance", id));
     };
 
     onSnapshot(query(collection(db, "attendance"), orderBy("timestamp", "desc")), (snap) => {
         let rows = "";
         snap.forEach(d => {
             const data = d.data();
-            rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td></tr>`;
+            rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td>
+            <td><button onclick="deleteRecord('${d.id}')">حذف</button></td></tr>`;
         });
         document.getElementById('attendanceTable').innerHTML = rows;
     });
