@@ -1,33 +1,75 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>إدارة الحضور</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f7f6; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .input-group { margin-bottom: 20px; }
+        input, select, button { padding: 10px; margin: 5px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>تسجيل الحضور</h2>
+    <div class="input-group">
+        <input type="text" id="empCode" placeholder="كود الموظف">
+        <select id="status"><option>حاضر</option><option>متأخر</option><option>مجاز</option><option>غائب</option></select>
+        <input type="time" id="customTime">
+        <button onclick="registerAttendance()">تسجيل</button>
+    </div>
+    <table>
+        <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th></tr></thead>
+        <tbody id="attendanceTable"></tbody>
+    </table>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+    const db = getFirestore(initializeApp({
+        apiKey: "AIzaSyDHcLPo-oAQmJr4O6M0NEAN32eAvUBo9LU",
+        projectId: "najdeenattendance",
+        storageBucket: "najdeenattendance.firebasestorage.app",
+        messagingSenderId: "614493844351",
+        appId: "1:614493844351:web:8efb02501b86b6192de04a"
+    }));
+
+    // دالة التسجيل الذكية
     window.registerAttendance = async () => {
         const code = document.getElementById('empCode').value;
         const manualStatus = document.getElementById('status').value;
         const manualTime = document.getElementById('customTime').value;
         
-        const empRef = doc(db, "employees", code);
-        const empSnap = await getDoc(empRef);
-        
-        if (!empSnap.exists()) { alert("الكود غير موجود في قائمة الموظفين!"); return; }
-        
-        // --- المنطق الجديد: التأخير بعد 08:05 ---
+        const empSnap = await getDoc(doc(db, "employees", code));
+        if (!empSnap.exists()) { alert("الكود غير موجود!"); return; }
+
         let finalStatus = manualStatus;
-        const [hours, minutes] = manualTime.split(':').map(Number);
-        
-        // النظام يغير الحالة لـ "متأخر" فقط إذا كان الاختيار اليدوي "حاضر" 
-        // والوقت يتجاوز 08:05
-        if (manualStatus === "حاضر") {
-            if (hours > 8 || (hours === 8 && minutes > 5)) {
-                finalStatus = "متأخر";
-            }
+        const [h, m] = manualTime.split(':').map(Number);
+        if (manualStatus === "حاضر" && (h > 8 || (h === 8 && m > 5))) {
+            finalStatus = "متأخر";
         }
-        // ------------------------------------------
 
         await addDoc(collection(db, "attendance"), { 
-            name: empSnap.data().name, 
-            status: finalStatus, 
-            time: manualTime, 
-            date: new Date().toLocaleDateString('ar-EG'), 
-            timestamp: new Date() 
+            name: empSnap.data().name, status: finalStatus, time: manualTime, 
+            date: new Date().toLocaleDateString('ar-EG'), timestamp: new Date() 
         });
-        
-        alert("تم تسجيل: " + empSnap.data().name + " كـ " + finalStatus + " (الوقت: " + manualTime + ")");
+        alert("تم تسجيل: " + empSnap.data().name + " كـ " + finalStatus);
     };
+
+    onSnapshot(collection(db, "attendance"), snap => {
+        let rows = "";
+        snap.forEach(d => {
+            let data = d.data();
+            rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td></tr>`;
+        });
+        document.getElementById('attendanceTable').innerHTML = rows;
+    });
+</script>
+</body>
+</html>
