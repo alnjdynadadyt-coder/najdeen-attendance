@@ -2,14 +2,14 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>إدارة الحضور الذكية</title>
+    <title>إدارة الموظفين والحضور</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #eef2f3; }
         .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
         .input-group { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         input, select, button { padding: 12px; border: 1px solid #ccc; border-radius: 5px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
         th { background-color: #007bff; color: white; }
     </style>
 </head>
@@ -35,7 +35,13 @@
 </div>
 
 <div class="container">
-    <h3>إضافة موظف جديد</h3>
+    <h3>قائمة الموظفين</h3>
+    <table>
+        <thead><tr><th>الكود</th><th>الاسم</th><th>إجراءات</th></tr></thead>
+        <tbody id="employeesTable"></tbody>
+    </table>
+    <hr>
+    <h3>إضافة/تعديل موظف</h3>
     <div class="input-group">
         <input type="text" id="newEmpCode" placeholder="كود الموظف">
         <input type="text" id="newEmpName" placeholder="اسم الموظف">
@@ -58,41 +64,42 @@
     };
 
     const db = getFirestore(initializeApp(firebaseConfig));
-    
-    // ضبط الوقت الحالي تلقائياً عند فتح الصفحة
     document.getElementById('customTime').value = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit', hour12: false});
 
+    // تسجيل الحضور
     window.registerAttendance = async () => {
         const code = document.getElementById('empCode').value;
         const manualTime = document.getElementById('customTime').value;
         const manualStatus = document.getElementById('status').value;
-        
         const empSnap = await getDoc(doc(db, "employees", code));
         if (!empSnap.exists()) { alert("الكود غير موجود!"); return; }
 
         let finalStatus = manualStatus;
         const [hours, minutes] = manualTime.split(':').map(Number);
+        if (manualStatus === "حاضر" && (hours > 8 || (hours === 8 && minutes > 5))) finalStatus = "متأخر";
 
-        if (manualStatus === "حاضر") {
-            if (hours === 8 && minutes > 5) finalStatus = "متأخر";
-            else if (hours > 8) finalStatus = "متأخر";
-        }
+        const today = new Date();
+        const dayName = today.toLocaleDateString('ar-EG', { weekday: 'long' });
+        const dateStr = `${dayName} ${today.toLocaleDateString('ar-EG')}`;
 
         await addDoc(collection(db, "attendance"), {
-            name: empSnap.data().name, status: finalStatus, date: new Date().toLocaleDateString('ar-EG'),
+            name: empSnap.data().name, status: finalStatus, date: dateStr,
             time: manualTime, timestamp: new Date()
         });
     };
 
+    // إدارة الموظفين
     window.addEmployee = async () => {
         const code = document.getElementById('newEmpCode').value;
         const name = document.getElementById('newEmpName').value;
         await setDoc(doc(db, "employees", code), { name: name });
-        alert("تم الحفظ");
+        alert("تم الحفظ/التعديل");
     };
 
+    window.deleteEmployee = async (code) => { await deleteDoc(doc(db, "employees", code)); };
     window.deleteRecord = async (id) => { await deleteDoc(doc(db, "attendance", id)); };
 
+    // جلب البيانات
     onSnapshot(query(collection(db, "attendance"), orderBy("timestamp", "desc")), (snap) => {
         let rows = "";
         snap.forEach(d => {
@@ -101,6 +108,15 @@
             <td><button onclick="deleteRecord('${d.id}')">حذف</button></td></tr>`;
         });
         document.getElementById('attendanceTable').innerHTML = rows;
+    });
+
+    onSnapshot(collection(db, "employees"), (snap) => {
+        let rows = "";
+        snap.forEach(d => {
+            rows += `<tr><td>${d.id}</td><td>${d.data().name}</td>
+            <td><button onclick="deleteEmployee('${d.id}')">حذف</button></td></tr>`;
+        });
+        document.getElementById('employeesTable').innerHTML = rows;
     });
 </script>
 </body>
