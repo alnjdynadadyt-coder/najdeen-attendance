@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>اعدادية النجدين للبنين</title>
+
+<style>
+body{
+font-family:Arial;
+background:#f5f5f5;
+text-align:center;
+padding-top:50px;
+}
+
+.login-box{
+background:white;
+width:90%;
+max-width:400px;
+margin:auto;
+padding:20px;
+border-radius:15px;
+box-shadow:0 0 15px #ccc;
+}
+
+input{
+width:90%;
+padding:12px;
+margin:10px;
+font-size:18px;
+}
+
+button{
+width:95%;
+padding:12px;
+background:#0066cc;
+color:white;
+border:none;
+border-radius:10px;
+font-size:18px;
+}
+</style>
+
+</head>
+<body>
+
+<div class="login-box">
+
+<h1>اعدادية النجدين للبنين</h1>
+
+<h3>نظام الحضور الإلكتروني</h3>
+
+<input id="username" placeholder="اسم المستخدم">
+
+<input id="password"
+type="password"
+placeholder="كلمة المرور">
+
+<button onclick="login()">
+دخول
+</button>
+
+</div>
+
+<script>
+
+function login(){
+
+let user =
+document.getElementById("username").value;
+
+let pass =
+document.getElementById("password").value;
+
+if(user==="Najdeen" && pass==="138138"){
+
+alert("تم تسجيل الدخول بنجاح");
+
+}else{
+
+alert("بيانات الدخول غير صحيحة");
+
+}
+
+}
+
+</script>
+
+</body>
+</html>
