@@ -2,49 +2,68 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>نظام الحضور - النجدين</title>
-    <!-- استدعاء Firebase -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-        import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDHcLPo-oAQmJr406M0NEAN32eAvUBo9LU",
-            authDomain: "najdeenattendance.firebaseapp.com",
-            projectId: "najdeenattendance",
-            storageBucket: "najdeenattendance.firebasestorage.app",
-            messagingSenderId: "614493844351",
-            appId: "1:614493844351:web:8efb02501b86b6192de04a"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        window.saveAttendance = async function() {
-            const name = document.getElementById("name").value;
-            if(name) {
-                try {
-                    await addDoc(collection(db, "attendance"), {
-                        employeeName: name,
-                        date: new Date().toLocaleDateString('ar-EG'),
-                        timestamp: new Date().toLocaleTimeString('ar-EG')
-                    });
-                    alert("تم تسجيل حضور: " + name);
-                    document.getElementById("name").value = ""; // تفريغ الخانة بعد التسجيل
-                } catch (e) {
-                    alert("حدث خطأ، حاول مرة أخرى");
-                }
-            } else {
-                alert("يرجى كتابة الاسم أولاً");
-            }
-        };
-    </script>
+    <title>نظام إدارة الحضور</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f7f6; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
+        input, select, button { padding: 10px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #f2f2f2; }
+    </style>
 </head>
 <body>
-    <div style="text-align:center; padding:50px; font-family: sans-serif;">
-        <h1>نظام تسجيل حضور النجدين</h1>
-        <input type="text" id="name" placeholder="أدخل اسمك هنا" style="padding: 10px; width: 200px;">
-        <button onclick="saveAttendance()" style="padding: 10px;">إرسال الحضور</button>
-    </div>
+
+<div class="container">
+    <h2>المديرية العامة لتربية القادسية - إعدادية النجدين للبنين</h2>
+    <input type="text" id="empCode" placeholder="كود الموظف">
+    <select id="status">
+        <option value="حاضر">حاضر</option>
+        <option value="غائب">غائب</option>
+    </select>
+    <button onclick="saveAttendance()">تسجيل</button>
+
+    <table id="attendanceTable">
+        <thead>
+            <tr>
+                <th>الاسم/الكود</th>
+                <th>التاريخ</th>
+                <th>الوقت</th>
+                <th>الحالة</th>
+            </tr>
+        </thead>
+        <tbody id="attendanceBody"></tbody>
+    </table>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+    const firebaseConfig = { /* استخدم بياناتك القديمة هنا */ };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.saveAttendance = async () => {
+        const code = document.getElementById('empCode').value;
+        const status = document.getElementById('status').value;
+        await addDoc(collection(db, "attendance"), {
+            employeeName: code,
+            status: status,
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString()
+        });
+        alert("تم التسجيل");
+    };
+
+    onSnapshot(query(collection(db, "attendance"), orderBy("time", "desc")), (snapshot) => {
+        const body = document.getElementById('attendanceBody');
+        body.innerHTML = "";
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            body.innerHTML += `<tr><td>${data.employeeName}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td></tr>`;
+        });
+    });
+</script>
 </body>
 </html>
