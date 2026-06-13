@@ -4,33 +4,61 @@
     <meta charset="UTF-8">
     <title>إدارة الحضور</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #f4f7f6; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-        .input-group { margin-bottom: 20px; }
-        input, select, button { padding: 10px; margin: 5px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        body { font-family: sans-serif; padding: 20px; background: #eef2f3; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .stats-bar { display: flex; gap: 10px; margin-bottom: 20px; }
+        .stat-card { flex: 1; padding: 15px; text-align: center; color: white; border-radius: 8px; font-weight: bold; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        input, select, button { padding: 12px; border: 1px solid #ccc; border-radius: 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+        th { background-color: #007bff; color: white; }
+        .btn-del { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="container">
+    <div class="stats-bar">
+        <div class="stat-card" style="background:#007bff">حاضر: <span id="s_حاضر">0</span></div>
+        <div class="stat-card" style="background:#ffc107">متأخر: <span id="s_متأخر">0</span></div>
+        <div class="stat-card" style="background:#28a745">مجاز: <span id="s_مجاز">0</span></div>
+        <div class="stat-card" style="background:#dc3545">غائب: <span id="s_غائب">0</span></div>
+    </div>
+
     <h2>تسجيل الحضور</h2>
     <div class="input-group">
         <input type="text" id="empCode" placeholder="كود الموظف">
-        <select id="status"><option>حاضر</option><option>متأخر</option><option>مجاز</option><option>غائب</option></select>
+        <select id="status">
+            <option value="حاضر">حاضر</option>
+            <option value="متأخر">متأخر</option>
+            <option value="مجاز">مجاز</option>
+            <option value="غائب">غائب</option>
+        </select>
         <input type="time" id="customTime">
-        <button onclick="registerAttendance()">تسجيل</button>
+        <button onclick="registerAttendance()" style="background:#007bff; color:white;">تسجيل</button>
+        <button onclick="exportExcel()" style="background:green; color:white;">تصدير Excel</button>
     </div>
     <table>
-        <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th></tr></thead>
+        <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>إجراء</th></tr></thead>
         <tbody id="attendanceTable"></tbody>
     </table>
 </div>
 
+<div class="container">
+    <h3>إدارة الموظفين</h3>
+    <table><thead><tr><th>الكود</th><th>الاسم</th><th>إجراء</th></tr></thead><tbody id="employeesTable"></tbody></table>
+    <hr>
+    <div class="input-group">
+        <input type="text" id="newEmpCode" placeholder="الكود">
+        <input type="text" id="newEmpName" placeholder="الاسم">
+        <button onclick="addEmployee()" style="background:#6c757d; color:white;">حفظ / تعديل</button>
+    </div>
+</div>
+
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, onSnapshot, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
     const db = getFirestore(initializeApp({
         apiKey: "AIzaSyDHcLPo-oAQmJr4O6M0NEAN32eAvUBo9LU",
@@ -40,20 +68,19 @@
         appId: "1:614493844351:web:8efb02501b86b6192de04a"
     }));
 
-    // دالة التسجيل الذكية
+    document.getElementById('customTime').value = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit', hour12: false});
+
     window.registerAttendance = async () => {
         const code = document.getElementById('empCode').value;
         const manualStatus = document.getElementById('status').value;
         const manualTime = document.getElementById('customTime').value;
-        
         const empSnap = await getDoc(doc(db, "employees", code));
+        
         if (!empSnap.exists()) { alert("الكود غير موجود!"); return; }
 
         let finalStatus = manualStatus;
         const [h, m] = manualTime.split(':').map(Number);
-        if (manualStatus === "حاضر" && (h > 8 || (h === 8 && m > 5))) {
-            finalStatus = "متأخر";
-        }
+        if (manualStatus === "حاضر" && (h > 8 || (h === 8 && m > 5))) finalStatus = "متأخر";
 
         await addDoc(collection(db, "attendance"), { 
             name: empSnap.data().name, status: finalStatus, time: manualTime, 
@@ -62,13 +89,40 @@
         alert("تم تسجيل: " + empSnap.data().name + " كـ " + finalStatus);
     };
 
+    window.addEmployee = async () => {
+        const code = document.getElementById('newEmpCode').value;
+        const name = document.getElementById('newEmpName').value;
+        await setDoc(doc(db, "employees", code), { name });
+        alert("تم الحفظ/التعديل");
+    };
+
+    window.deleteItem = async (c, id) => { await deleteDoc(doc(db, c, id)); };
+
+    window.exportExcel = () => {
+        let table = document.getElementById('attendanceTable').outerHTML;
+        let blob = new Blob(['\ufeff', table], {type: 'application/vnd.ms-excel'});
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement('a');
+        a.href = url; a.download = 'تقرير.xls'; a.click();
+    };
+
     onSnapshot(collection(db, "attendance"), snap => {
-        let rows = "";
+        let rows = "", stats = {حاضر:0, متأخر:0, مجاز:0, غائب:0};
         snap.forEach(d => {
             let data = d.data();
-            rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td></tr>`;
+            if(stats.hasOwnProperty(data.status)) stats[data.status]++;
+            rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td><td><button class="btn-del" onclick="deleteItem('attendance', '${d.id}')">حذف</button></td></tr>`;
         });
         document.getElementById('attendanceTable').innerHTML = rows;
+        for(let k in stats) document.getElementById('s_'+k).innerText = stats[k];
+    });
+
+    onSnapshot(collection(db, "employees"), snap => {
+        let rows = "";
+        snap.forEach(d => {
+            rows += `<tr><td>${d.id}</td><td>${d.data().name}</td><td><button onclick="document.getElementById('newEmpCode').value='${d.id}'; document.getElementById('newEmpName').value='${d.data().name}';">تعديل</button> <button class="btn-del" onclick="deleteItem('employees', '${d.id}')">حذف</button></td></tr>`;
+        });
+        document.getElementById('employeesTable').innerHTML = rows;
     });
 </script>
 </body>
