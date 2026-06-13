@@ -1,36 +1,92 @@
-<div class="container" style="margin-top: 20px;">
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>إدارة الحضور - إعدادية النجدين</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #eef2f3; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        input, select, button { padding: 12px; border: 1px solid #ccc; border-radius: 5px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+        th { background-color: #007bff; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>تسجيل الحضور</h2>
+    <div class="input-group">
+        <input type="text" id="empCode" placeholder="كود الموظف">
+        <select id="status">
+            <option value="حاضر">حاضر</option>
+            <option value="متأخر">متأخر</option>
+            <option value="مجاز">مجاز</option>
+        </select>
+        <button onclick="registerAttendance()">تسجيل</button>
+    </div>
+    <table>
+        <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th></tr></thead>
+        <tbody id="attendanceTable"></tbody>
+    </table>
+</div>
+
+<div class="container">
     <h3>إضافة موظف جديد</h3>
     <div class="input-group">
-        <input type="text" id="newEmpCode" placeholder="كود الموظف الجديد">
+        <input type="text" id="newEmpCode" placeholder="كود الموظف">
         <input type="text" id="newEmpName" placeholder="اسم الموظف">
         <button onclick="addEmployee()">حفظ الموظف</button>
     </div>
 </div>
 
 <script type="module">
-    // تأكد من استيراد دالة setDoc من مكتبة فايربيس
-    import { setDoc, doc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, onSnapshot, query, orderBy, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDHcLPo-oAQmJr4O6M0NEAN32eAvUBo9LU",
+      authDomain: "najdeenattendance.firebaseapp.com",
+      projectId: "najdeenattendance",
+      storageBucket: "najdeenattendance.firebasestorage.app",
+      messagingSenderId: "614493844351",
+      appId: "1:614493844351:web:8efb02501b86b6192de04a",
+      measurementId: "G-W1QED19TYN"
+    };
+
+    const db = getFirestore(initializeApp(firebaseConfig));
+
+    window.registerAttendance = async () => {
+        const code = document.getElementById('empCode').value;
+        const status = document.getElementById('status').value;
+        const empSnap = await getDoc(doc(db, "employees", code));
+        if (!empSnap.exists()) { alert("الكود غير موجود!"); return; }
+        await addDoc(collection(db, "attendance"), {
+            name: empSnap.data().name, status: status, date: new Date().toLocaleDateString('ar-EG'),
+            time: new Date().toLocaleTimeString('ar-EG'), timestamp: new Date()
+        });
+        alert("تم تسجيل: " + empSnap.data().name);
+    };
 
     window.addEmployee = async () => {
         const code = document.getElementById('newEmpCode').value;
         const name = document.getElementById('newEmpName').value;
-
-        if (!code || !name) {
-            alert("يرجى إدخال الكود والاسم!");
-            return;
-        }
-
-        try {
-            // حفظ الموظف في قاعدة البيانات
-            await setDoc(doc(db, "employees", code), {
-                name: name
-            });
-            alert("تم حفظ الموظف: " + name);
-            // تفريغ الخانات بعد الحفظ
-            document.getElementById('newEmpCode').value = "";
-            document.getElementById('newEmpName').value = "";
-        } catch (e) {
-            alert("حدث خطأ: " + e.message);
-        }
+        if (!code || !name) { alert("يرجى إدخال الكود والاسم!"); return; }
+        await setDoc(doc(db, "employees", code), { name: name });
+        alert("تم حفظ الموظف: " + name);
+        document.getElementById('newEmpCode').value = "";
+        document.getElementById('newEmpName').value = "";
     };
+
+    onSnapshot(query(collection(db, "attendance"), orderBy("timestamp", "desc")), (snap) => {
+        let rows = "";
+        snap.forEach(d => {
+            const data = d.data();
+            rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td></tr>`;
+        });
+        document.getElementById('attendanceTable').innerHTML = rows;
+    });
 </script>
+</body>
+</html>
