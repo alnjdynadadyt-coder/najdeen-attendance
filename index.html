@@ -2,13 +2,13 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>إدارة الحضور الذكية</title>
+    <title>إدارة الحضور والغياب</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #f4f7f6; }
         .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .stats { display: flex; justify-content: space-around; margin-bottom: 20px; flex-wrap: wrap; }
         .stat-box { padding: 10px; border-radius: 8px; color: white; width: 20%; text-align: center; font-weight: bold; }
-        input, select, button { padding: 8px; margin: 5px; border-radius: 5px; border: 1px solid #ddd; }
+        input, select, button { padding: 10px; margin: 5px; border-radius: 5px; border: 1px solid #ddd; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #eee; padding: 10px; text-align: center; }
     </style>
@@ -27,14 +27,9 @@
     <input type="text" id="empCode" placeholder="كود الموظف">
     <select id="status"><option>حاضر</option><option>متأخر</option><option>مجاز</option><option>غائب</option></select>
     <input type="time" id="customTime">
-    <button onclick="registerAttendance()">تسجيل</button>
+    <button onclick="registerAttendance()" style="background: #007bff; color: white;">تسجيل</button>
     <button onclick="exportExcel()" style="background: green; color: white;">تصدير Excel</button>
     
-    <hr>
-    <h3>الفلترة والتقرير</h3>
-    <select id="filterEmp"><option value="الكل">كل الموظفين</option></select>
-    <select id="filterPeriod"><option value="يوم">يوم</option><option value="أسبوع">أسبوع</option><option value="شهر">شهر</option></select>
-
     <table>
         <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>إجراء</th></tr></thead>
         <tbody id="attendanceTable"></tbody>
@@ -43,15 +38,15 @@
 
 <div class="container">
     <h3>إدارة الموظفين</h3>
-    <table><thead><tr><th>الكود</th><th>الاسم</th><th>إجراء</th></tr></thead><tbody id="employeesTable"></tbody></table>
     <input type="text" id="newEmpCode" placeholder="الكود">
     <input type="text" id="newEmpName" placeholder="الاسم">
-    <button onclick="addEmployee()">حفظ / تعديل</button>
+    <button onclick="addEmployee()" style="background: #6c757d; color: white;">حفظ / تعديل</button>
+    <table><thead><tr><th>الكود</th><th>الاسم</th><th>إجراء</th></tr></thead><tbody id="employeesTable"></tbody></table>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-    import { getFirestore, doc, collection, addDoc, onSnapshot, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, onSnapshot, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
     const db = getFirestore(initializeApp({
         apiKey: "AIzaSyDHcLPo-oAQmJr4O6M0NEAN32eAvUBo9LU",
@@ -61,58 +56,64 @@
         appId: "1:614493844351:web:8efb02501b86b6192de04a"
     }));
 
+    // جعل الدوال متاحة عالمياً
     window.registerAttendance = async () => {
         const code = document.getElementById('empCode').value;
         const status = document.getElementById('status').value;
         const time = document.getElementById('customTime').value;
-        const name = await getDoc(doc(db, "employees", code)).then(s => s.exists() ? s.data().name : null);
-        if (!name) { alert("الكود غير موجود"); return; }
-        await addDoc(collection(db, "attendance"), { name, status, time, date: new Date().toLocaleDateString('ar-EG'), timestamp: new Date() });
-        alert("تم التسجيل");
+        const empRef = doc(db, "employees", code);
+        const empSnap = await getDoc(empRef);
+        
+        if (!empSnap.exists()) { alert("الكود غير موجود في قائمة الموظفين!"); return; }
+        
+        await addDoc(collection(db, "attendance"), { 
+            name: empSnap.data().name, status, time, 
+            date: new Date().toLocaleDateString('ar-EG'), timestamp: new Date() 
+        });
+        alert("تم تسجيل: " + empSnap.data().name);
     };
 
     window.addEmployee = async () => {
-        await setDoc(doc(db, "employees", document.getElementById('newEmpCode').value), { name: document.getElementById('newEmpName').value });
+        const code = document.getElementById('newEmpCode').value;
+        const name = document.getElementById('newEmpName').value;
+        if(!code || !name) { alert("أدخل الكود والاسم"); return; }
+        await setDoc(doc(db, "employees", code), { name });
         alert("تم الحفظ");
     };
 
-    window.editEmployee = (code, name) => {
+    window.deleteItem = async (coll, id) => { if(confirm("هل أنت متأكد؟")) await deleteDoc(doc(db, coll, id)); };
+
+    window.editEmp = (code, name) => {
         document.getElementById('newEmpCode').value = code;
         document.getElementById('newEmpName').value = name;
     };
 
-    window.deleteDoc = async (coll, id) => { await deleteDoc(doc(db, coll, id)); };
-
     window.exportExcel = () => {
-        let uri = 'data:application/vnd.ms-excel;base64,',
-            template = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head></head><body><table>{table}</table></body></html>',
-            base64 = s => window.btoa(unescape(encodeURIComponent(s))),
-            format = (s, c) => s.replace(/{(\w+)}/g, (m, p) => c[p]);
-        let table = document.getElementById('attendanceTable').innerHTML;
-        let ctx = {worksheet: 'Worksheet', table: table};
-        window.location.href = uri + base64(format(template, ctx));
+        let table = document.getElementById('attendanceTable').outerHTML;
+        let blob = new Blob(['\ufeff', table], {type: 'application/vnd.ms-excel'});
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement('a');
+        a.href = url; a.download = 'التقرير.xls'; a.click();
     };
 
-    // مراقبة البيانات
+    // جلب البيانات لحظياً
     onSnapshot(collection(db, "attendance"), snap => {
         let rows = "", stats = {حاضر:0, متأخر:0, مجاز:0, غائب:0};
         snap.forEach(d => {
             let data = d.data();
-            stats[data.status]++;
-            rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td><td><button onclick="deleteDoc('attendance', '${d.id}')">حذف</button></td></tr>`;
+            if(stats.hasOwnProperty(data.status)) stats[data.status]++;
+            rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td><td><button onclick="deleteItem('attendance', '${d.id}')">حذف</button></td></tr>`;
         });
         document.getElementById('attendanceTable').innerHTML = rows;
         for(let k in stats) document.getElementById('s_'+k).innerText = stats[k];
     });
 
     onSnapshot(collection(db, "employees"), snap => {
-        let rows = "", options = '<option value="الكل">كل الموظفين</option>';
+        let rows = "";
         snap.forEach(d => {
-            rows += `<tr><td>${d.id}</td><td>${d.data().name}</td><td><button onclick="editEmployee('${d.id}', '${d.data().name}')">تعديل</button> <button onclick="deleteDoc('employees', '${d.id}')">حذف</button></td></tr>`;
-            options += `<option value="${d.data().name}">${d.data().name}</option>`;
+            rows += `<tr><td>${d.id}</td><td>${d.data().name}</td><td><button onclick="editEmp('${d.id}', '${d.data().name}')">تعديل</button> <button onclick="deleteItem('employees', '${d.id}')">حذف</button></td></tr>`;
         });
         document.getElementById('employeesTable').innerHTML = rows;
-        document.getElementById('filterEmp').innerHTML = options;
     });
 </script>
 </body>
