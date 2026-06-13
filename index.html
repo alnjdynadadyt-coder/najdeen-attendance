@@ -2,17 +2,19 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>إدارة الحضور الذكية</title>
+    <title>إدارة الحضور الاحترافية</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #eef2f3; }
         .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .stats-bar { display: flex; gap: 10px; margin-bottom: 20px; }
-        .stat-card { flex: 1; padding: 15px; text-align: center; color: white; border-radius: 8px; font-weight: bold; }
+        .stats-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .stat-card { flex: 1; min-width: 120px; padding: 15px; text-align: center; color: white; border-radius: 8px; font-weight: bold; }
         .input-group { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         input, select, button { padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        table { width: 100%; border-collapse: collapse; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
         th { background-color: #007bff; color: white; }
+        .btn-del { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+        .btn-edit { background: #ffc107; color: black; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -28,24 +30,33 @@
     <h3>فلترة التقرير</h3>
     <div class="input-group">
         <select id="filterEmp"><option value="الكل">كل الموظفين</option></select>
-        <select id="filterPeriod"><option value="يوم">يوم</option><option value="أسبوع">أسبوع</option><option value="شهر">شهر</option></select>
-        <button onclick="renderTable()">تطبيق الفلترة</button>
+        <button onclick="renderTable()" style="background:#007bff; color:white;">تطبيق الفلترة</button>
         <button onclick="exportExcel()" style="background:green; color:white;">تصدير Excel</button>
     </div>
-
     <table>
-        <thead><tr><th>الاسم</th><th>التاريخ (اليوم)</th><th>الوقت</th><th>الحالة</th><th>إجراء</th></tr></thead>
+        <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>إجراء</th></tr></thead>
         <tbody id="attendanceTable"></tbody>
     </table>
 </div>
 
 <div class="container">
-    <h3>تسجيل جديد</h3>
+    <h3>تسجيل الحضور</h3>
     <div class="input-group">
         <input type="text" id="empCode" placeholder="كود الموظف">
         <select id="status"><option>حاضر</option><option>متأخر</option><option>مجاز</option><option>غائب</option></select>
         <input type="time" id="customTime">
         <button onclick="registerAttendance()" style="background:#007bff; color:white;">تسجيل</button>
+    </div>
+</div>
+
+<div class="container">
+    <h3>إدارة الموظفين</h3>
+    <table><thead><tr><th>الكود</th><th>الاسم</th><th>إجراء</th></tr></thead><tbody id="employeesTable"></tbody></table>
+    <hr>
+    <div class="input-group">
+        <input type="text" id="newEmpCode" placeholder="الكود">
+        <input type="text" id="newEmpName" placeholder="اسم الموظف">
+        <button onclick="addEmployee()" style="background:#6c757d; color:white;">حفظ / تعديل</button>
     </div>
 </div>
 
@@ -69,38 +80,42 @@
         const status = document.getElementById('status').value;
         const time = document.getElementById('customTime').value;
         const empSnap = await getDoc(doc(db, "employees", code));
-        if (!empSnap.exists()) { alert("الكود خطأ"); return; }
+        if (!empSnap.exists()) { alert("الكود غير موجود"); return; }
         
         let finalStatus = status;
         const [h, m] = time.split(':').map(Number);
         if (status === "حاضر" && (h > 8 || (h === 8 && m > 5))) finalStatus = "متأخر";
 
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('ar-EG', {weekday: 'long'}) + ' ' + now.toLocaleDateString('ar-EG');
-
-        await addDoc(collection(db, "attendance"), { name: empSnap.data().name, status: finalStatus, time, date: dateStr, timestamp: now });
+        const d = new Date();
+        const dateStr = d.toLocaleDateString('ar-EG', {weekday: 'long'}) + ' ' + d.toLocaleDateString('ar-EG');
+        await addDoc(collection(db, "attendance"), { name: empSnap.data().name, status: finalStatus, time, date: dateStr, timestamp: d });
         alert("تم التسجيل");
+    };
+
+    window.addEmployee = async () => {
+        const code = document.getElementById('newEmpCode').value;
+        const name = document.getElementById('newEmpName').value;
+        await setDoc(doc(db, "employees", code), { name });
+        alert("تم الحفظ");
     };
 
     window.renderTable = () => {
         const emp = document.getElementById('filterEmp').value;
-        const period = document.getElementById('filterPeriod').value;
-        let filtered = allAttendance.filter(item => emp === "الكل" || item.name === emp);
-        // التصفية الزمنية يمكن توسيعها هنا
-        let rows = "";
+        let filtered = emp === "الكل" ? allAttendance : allAttendance.filter(i => i.name === emp);
+        let rows = "", stats = {حاضر:0, متأخر:0, مجاز:0, غائب:0};
         filtered.forEach(d => {
-            rows += `<tr><td>${d.name}</td><td>${d.date}</td><td>${d.time}</td><td>${d.status}</td>
-            <td><button onclick="deleteDoc(doc(db, 'attendance', '${d.id}'))">حذف</button></td></tr>`;
+            if(stats.hasOwnProperty(d.status)) stats[d.status]++;
+            rows += `<tr><td>${d.name}</td><td>${d.date}</td><td>${d.time}</td><td>${d.status}</td><td><button class="btn-del" onclick="deleteDoc(doc(db, 'attendance', '${d.id}'))">حذف</button></td></tr>`;
         });
         document.getElementById('attendanceTable').innerHTML = rows;
+        for(let k in stats) document.getElementById('s_'+k).innerText = stats[k];
     };
 
     window.exportExcel = () => {
         let table = document.getElementById('attendanceTable').outerHTML;
-        let blob = new Blob(['\ufeff', table], {type: 'application/vnd.ms-excel'});
-        let url = URL.createObjectURL(blob);
         let a = document.createElement('a');
-        a.href = url; a.download = 'تقرير_الحضور.xls'; a.click();
+        a.href = 'data:application/vnd.ms-excel,' + encodeURIComponent(table);
+        a.download = 'تقرير.xls'; a.click();
     };
 
     onSnapshot(collection(db, "attendance"), snap => {
@@ -110,8 +125,12 @@
     });
 
     onSnapshot(collection(db, "employees"), snap => {
-        let opts = '<option value="الكل">كل الموظفين</option>';
-        snap.forEach(d => opts += `<option value="${d.data().name}">${d.data().name}</option>`);
+        let rows = "", opts = '<option value="الكل">كل الموظفين</option>';
+        snap.forEach(d => {
+            rows += `<tr><td>${d.id}</td><td>${d.data().name}</td><td><button class="btn-edit" onclick="document.getElementById('newEmpCode').value='${d.id}'; document.getElementById('newEmpName').value='${d.data().name}';">تعديل</button> <button class="btn-del" onclick="deleteDoc(doc(db, 'employees', '${d.id}'))">حذف</button></td></tr>`;
+            opts += `<option value="${d.data().name}">${d.data().name}</option>`;
+        });
+        document.getElementById('employeesTable').innerHTML = rows;
         document.getElementById('filterEmp').innerHTML = opts;
     });
 </script>
