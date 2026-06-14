@@ -1,1 +1,104 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>إدارة الحضور - اعدادية النجدين للبنين</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #eef2f3; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .input-group { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; background: #f8f9fa; padding: 15px; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #007bff; color: white; }
+        .btn-del { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+    </style>
+</head>
+<body>
 
+<div class="container" style="text-align:center;">
+    <h2>اعدادية النجدين للبنين</h2>
+    <div id="controls">
+        <input type="date" id="dateSelector" onchange="renderTable()">
+        <button onclick="exportExcel()">تصدير Excel</button>
+        <button onclick="backupData()">نسخة احتياطية</button>
+        <button onclick="checkAttendanceStatus()" style="background:#dc3545; color:white;">كشف المتغيبين</button>
+    </div>
+    <div id="missingReport" style="color:red; font-weight:bold; margin-top:10px;"></div>
+</div>
+
+<div class="container">
+    <h3>تسجيل الحضور</h3>
+    <div class="input-group">
+        <input type="text" id="empCode" placeholder="كود">
+        <select id="status"><option>حاضر</option><option>متأخر</option><option>مجاز</option><option>غائب</option></select>
+        <input type="time" id="customTime">
+        <button onclick="registerAttendance()" style="background:#007bff; color:white;">تسجيل</button>
+    </div>
+    <table id="mainTable">
+        <thead><tr><th>الاسم</th><th>التاريخ</th><th>الحضور</th><th>الانصراف</th><th>الحالة</th><th>إجراء</th></tr></thead>
+        <tbody id="attendanceTable"></tbody>
+    </table>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, onSnapshot, setDoc, deleteDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+    const db = getFirestore(initializeApp({ apiKey: "AIzaSyDHcLPo-oAQmJr4O6M0NEAN32eAvUBo9LU", projectId: "najdeenattendance", storageBucket: "najdeenattendance.firebasestorage.app", messagingSenderId: "614493844351", appId: "1:614493844351:web:8efb02501b86b6192de04a" }));
+
+    window.registerAttendance = async () => {
+        const code = document.getElementById('empCode').value;
+        const date = document.getElementById('dateSelector').value;
+        const statusRaw = document.getElementById('status').value;
+        const timeInput = document.getElementById('customTime').value;
+        
+        const empSnap = await getDoc(doc(db, "employees", code));
+        if (!empSnap.exists()) { alert("الكود غير موجود"); return; }
+        
+        let status = statusRaw;
+        if(status === "حاضر" && timeInput > "08:05") status = "متأخر";
+
+        await addDoc(collection(db, "attendance"), { 
+            empCode: code, name: empSnap.data().name, status, time: timeInput, exitTime: "", date 
+        });
+        alert("تم التسجيل");
+    };
+
+    window.renderTable = () => {
+        const date = document.getElementById('dateSelector').value;
+        onSnapshot(query(collection(db, "attendance"), where("date", "==", date)), snap => {
+            let rows = "";
+            snap.forEach(d => {
+                let data = d.data();
+                rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td>
+                <td><input type="time" onchange="updateExitTime('${d.id}', this.value)" value="${data.exitTime || ''}"></td>
+                <td>${data.status}</td><td><button class="btn-del" onclick="deleteDoc(doc(db,'attendance','${d.id}'))">حذف</button></td></tr>`;
+            });
+            document.getElementById('attendanceTable').innerHTML = rows;
+        });
+    };
+
+    window.updateExitTime = async (id, val) => { await setDoc(doc(db, 'attendance', id), { exitTime: val }, { merge: true }); };
+
+    window.checkAttendanceStatus = async () => {
+        const date = document.getElementById('dateSelector').value;
+        const emps = await getDocs(collection(db, "employees"));
+        const atts = await getDocs(query(collection(db, "attendance"), where("date", "==", date)));
+        let reg = atts.docs.map(d => d.data().empCode);
+        let report = document.getElementById('missingReport');
+        report.innerHTML = "لم يسجلوا اليوم: ";
+        emps.forEach(d => { if (!reg.includes(d.id)) report.innerHTML += d.data().name + "، "; });
+    };
+
+    window.exportExcel = () => {
+        let content = document.getElementById('mainTable').outerHTML;
+        let a = document.createElement('a');
+        a.href = 'data:application/vnd.ms-excel,' + encodeURIComponent(content);
+        a.download = 'report.xls'; a.click();
+    };
+
+    document.getElementById('dateSelector').valueAsDate = new Date();
+    renderTable();
+</script>
+</body>
+</html>
