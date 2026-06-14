@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>إدارة الحضور - نظام متكامل</title>
+    <title>إدارة الحضور - النظام المتكامل</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #eef2f3; }
         .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
@@ -19,6 +19,12 @@
 <body>
 
 <div class="container">
+    <h3>إعدادات المؤسسة</h3>
+    <div class="input-group">
+        <input type="text" id="dirName" placeholder="اسم المديرية">
+        <input type="text" id="schName" placeholder="اسم المدرسة">
+    </div>
+    
     <h3>التحكم في التاريخ والتقارير</h3>
     <input type="date" id="dateSelector" onchange="renderTable()">
     <button onclick="exportExcel()" style="background:green; color:white;">تصدير Excel</button>
@@ -38,7 +44,7 @@
         <input type="time" id="customTime">
         <button onclick="registerAttendance()" style="background:#007bff; color:white;">تسجيل</button>
     </div>
-    <table>
+    <table id="mainTable">
         <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>إجراء</th></tr></thead>
         <tbody id="attendanceTable"></tbody>
     </table>
@@ -66,6 +72,9 @@
         appId: "1:614493844351:web:8efb02501b86b6192de04a"
     }));
 
+    window.deleteAtt = (id) => deleteDoc(doc(db, 'attendance', id));
+    window.deleteEmp = (id) => deleteDoc(doc(db, 'employees', id));
+
     document.getElementById('dateSelector').valueAsDate = new Date();
     document.getElementById('customTime').value = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit', hour12: false});
 
@@ -77,7 +86,7 @@
 
         const q = query(collection(db, "attendance"), where("empCode", "==", code), where("date", "==", date));
         const check = await getDocs(q);
-        if (!check.empty) { alert("هذا الموظف مسجل بالفعل في هذا التاريخ!"); return; }
+        if (!check.empty) { alert("هذا الموظف مسجل بالفعل!"); return; }
 
         const empSnap = await getDoc(doc(db, "employees", code));
         if (!empSnap.exists()) { alert("الكود غير موجود"); return; }
@@ -87,7 +96,7 @@
         if (status === "حاضر" && (h > 8 || (h === 8 && m > 5))) finalStatus = "متأخر";
 
         await addDoc(collection(db, "attendance"), { empCode: code, name: empSnap.data().name, status: finalStatus, time, date });
-        alert("تم التسجيل بنجاح");
+        alert("تم التسجيل");
     };
 
     window.renderTable = () => {
@@ -99,7 +108,7 @@
                 let data = d.data();
                 if(stats.hasOwnProperty(data.status)) stats[data.status]++;
                 rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td>
-                <td><button class="btn-del" onclick="deleteDoc(doc(db, 'attendance', '${d.id}'))">حذف</button></td></tr>`;
+                <td><button class="btn-del" onclick="deleteAtt('${d.id}')">حذف</button></td></tr>`;
             });
             document.getElementById('attendanceTable').innerHTML = rows;
             for(let k in stats) document.getElementById('s_'+k).innerText = stats[k];
@@ -114,9 +123,9 @@
     };
 
     window.exportExcel = () => {
-        let table = document.getElementById('attendanceTable').outerHTML;
+        let content = `<h1>${document.getElementById('dirName').value} - ${document.getElementById('schName').value}</h1>` + document.getElementById('mainTable').outerHTML;
         let a = document.createElement('a');
-        a.href = 'data:application/vnd.ms-excel,' + encodeURIComponent(table);
+        a.href = 'data:application/vnd.ms-excel,' + encodeURIComponent(content);
         a.download = 'تقرير_' + document.getElementById('dateSelector').value + '.xls';
         a.click();
     };
@@ -124,7 +133,7 @@
     onSnapshot(collection(db, "employees"), snap => {
         let rows = "";
         snap.forEach(d => {
-            rows += `<tr><td>${d.id}</td><td>${d.data().name}</td><td><button onclick="document.getElementById('newEmpCode').value='${d.id}'; document.getElementById('newEmpName').value='${d.data().name}';">تعديل</button> <button class="btn-del" onclick="deleteDoc(doc(db, 'employees', '${d.id}'))">حذف</button></td></tr>`;
+            rows += `<tr><td>${d.id}</td><td>${d.data().name}</td><td><button onclick="document.getElementById('newEmpCode').value='${d.id}'; document.getElementById('newEmpName').value='${d.data().name}';">تعديل</button> <button class="btn-del" onclick="deleteEmp('${d.id}')">حذف</button></td></tr>`;
         });
         document.getElementById('employeesTable').innerHTML = rows;
     });
