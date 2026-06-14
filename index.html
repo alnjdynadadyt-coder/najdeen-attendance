@@ -105,7 +105,6 @@
     document.getElementById('dateSelector').valueAsDate = new Date();
     document.getElementById('customTime').value = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit', hour12: false});
 
-    // كشف غير المسجلين
     window.checkAttendanceStatus = async () => {
         const date = document.getElementById('dateSelector').value;
         const allEmployees = await getDocs(collection(db, "employees"));
