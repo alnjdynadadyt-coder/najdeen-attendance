@@ -2,40 +2,33 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>إدارة الحضور - اعدادية النجدين للبنين</title>
+    <title>إدارة الحضور - اعدادية النجدين</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 15px; background: #f4f7f6; }
+        body { font-family: sans-serif; padding: 15px; background: #f4f7f6; }
         .container { max-width: 950px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .header { text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-bottom: 20px; }
         .input-group { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eee; }
         input, select, button { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
-        button { cursor: pointer; transition: 0.3s; }
-        .btn-blue { background: #3498db; color: white; border: none; }
-        .btn-green { background: #27ae60; color: white; border: none; }
-        .btn-red { background: #e74c3c; color: white; border: none; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
         th { background-color: #34495e; color: white; }
+        .btn-red { background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">
-        <h2>المديرية العامة لتربية القادسية - تربية الحمزة</h2>
-        <h3>اعدادية النجدين للبنين</h3>
-    </div>
-
-    <!-- ميزات النظام الجديدة -->
+    <h2>المديرية العامة لتربية القادسية - تربية الحمزة</h2>
+    <h3>اعدادية النجدين للبنين</h3>
+    
     <div class="input-group">
         <input type="date" id="dateSelector" onchange="renderAttendance()">
-        <input type="text" id="reason" placeholder="سبب الغياب/الإجازة/ملاحظة">
-        <button onclick="registerAttendance()" class="btn-blue">تسجيل الحضور</button>
-        <button onclick="backupData()" class="btn-green">تحميل نسخة احتياطية</button>
+        <input type="text" id="reason" placeholder="سبب الغياب/الإجازة">
+        <select id="status"><option>حاضر</option><option>متأخر</option><option>مجاز</option><option>غائب</option></select>
+        <button onclick="registerAttendance()" style="background:#3498db; color:white;">تسجيل</button>
+        <button onclick="backupData()" style="background:#27ae60; color:white;">نسخة احتياطية</button>
     </div>
 
-    <!-- الإحصائيات -->
-    <div style="display:flex; gap:10px; justify-content: space-around; margin-bottom: 20px;">
+    <div style="display:flex; gap:10px; margin-bottom: 15px;">
         <div>حاضر: <span id="s_حاضر">0</span></div>
         <div>متأخر: <span id="s_متأخر">0</span></div>
         <div>مجاز: <span id="s_مجاز">0</span></div>
@@ -46,6 +39,16 @@
         <thead><tr><th>الاسم</th><th>اليوم</th><th>التاريخ</th><th>الحالة</th><th>السبب</th><th>إجراء</th></tr></thead>
         <tbody></tbody>
     </table>
+</div>
+
+<div class="container">
+    <h3>إدارة الموظفين</h3>
+    <div class="input-group">
+        <input type="text" id="empCode" placeholder="الكود">
+        <input type="text" id="empName" placeholder="الاسم">
+        <button onclick="saveEmployee()" style="background:#2c3e50; color:white;">حفظ / تعديل</button>
+    </div>
+    <table><thead><tr><th>الكود</th><th>الاسم</th><th>إجراء</th></tr></thead><tbody id="employeesTable"></tbody></table>
 </div>
 
 <script type="module">
@@ -60,25 +63,19 @@
         appId: "1:614493844351:web:8efb02501b86b6192de04a"
     }));
 
-    // إعدادات التاريخ
-    const today = new Date();
-    document.getElementById('dateSelector').valueAsDate = today;
+    document.getElementById('dateSelector').valueAsDate = new Date();
 
     window.registerAttendance = async () => {
         const code = prompt("أدخل كود الموظف:");
         if (!code) return;
         const date = document.getElementById('dateSelector').value;
         const day = new Date(date).toLocaleDateString('ar-EG', {weekday: 'long'});
-        const status = "حاضر"; // افتراضي
+        const status = document.getElementById('status').value;
         const reason = document.getElementById('reason').value;
-
-        const q = query(collection(db, "attendance"), where("empCode", "==", code), where("date", "==", date));
-        const check = await getDocs(q);
-        if (!check.empty) { alert("الموظف مسجل بالفعل لهذا اليوم!"); return; }
 
         const empSnap = await getDoc(doc(db, "employees", code));
         if (!empSnap.exists()) { alert("كود غير موجود"); return; }
-
+        
         await addDoc(collection(db, "attendance"), { empCode: code, name: empSnap.data().name, status, reason, date, day });
         alert("تم التسجيل");
     };
@@ -99,15 +96,29 @@
         });
     };
 
+    window.saveEmployee = async () => {
+        const code = document.getElementById('empCode').value;
+        const name = document.getElementById('empName').value;
+        if(!code || !name) return;
+        await setDoc(doc(db, "employees", code), { name });
+        alert("تم الحفظ");
+    };
+
+    onSnapshot(collection(db, "employees"), snap => {
+        let html = "";
+        snap.forEach(d => {
+            html += `<tr><td>${d.id}</td><td>${d.data().name}</td>
+            <td><button class="btn-red" onclick="deleteDoc(doc(db, 'employees', '${d.id}'))">حذف</button></td></tr>`;
+        });
+        document.getElementById('employeesTable').innerHTML = html;
+    });
+
     window.backupData = async () => {
         const snap = await getDocs(collection(db, "attendance"));
-        let data = [];
-        snap.forEach(d => data.push(d.data()));
-        const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+        let data = []; snap.forEach(d => data.push(d.data()));
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = "backup_attendance.json";
-        a.click();
+        a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(data));
+        a.download = "backup.json"; a.click();
     };
 
     renderAttendance();
