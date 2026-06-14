@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>إدارة الحضور - النظام المتكامل</title>
+    <title>إدارة الحضور - اعدادية النجدين للبنين</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #eef2f3; }
         .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
@@ -18,16 +18,16 @@
 </head>
 <body>
 
+<div class="container" style="text-align:center;">
+    <h2 style="color:#007bff;">المديرية العامة لتربية القادسية - تربية الحمزة</h2>
+    <h3>اعدادية النجدين للبنين</h3>
+</div>
+
 <div class="container">
-    <h3>إعدادات المؤسسة</h3>
-    <div class="input-group">
-        <input type="text" id="dirName" placeholder="اسم المديرية">
-        <input type="text" id="schName" placeholder="اسم المدرسة">
-    </div>
-    
     <h3>التحكم في التاريخ والتقارير</h3>
     <input type="date" id="dateSelector" onchange="renderTable()">
     <button onclick="exportExcel()" style="background:green; color:white;">تصدير Excel</button>
+    <button onclick="backupData()" style="background:#6c757d; color:white;">نسخة احتياطية (JSON)</button>
     
     <div class="stats-bar" style="margin-top: 20px;">
         <div class="stat-card" style="background:#007bff">حاضر: <span id="s_حاضر">0</span></div>
@@ -41,11 +41,12 @@
     <div class="input-group">
         <input type="text" id="empCode" placeholder="كود الموظف">
         <select id="status"><option>حاضر</option><option>متأخر</option><option>مجاز</option><option>غائب</option></select>
+        <input type="text" id="reason" placeholder="سبب الغياب/الملاحظة">
         <input type="time" id="customTime">
         <button onclick="registerAttendance()" style="background:#007bff; color:white;">تسجيل</button>
     </div>
     <table id="mainTable">
-        <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>إجراء</th></tr></thead>
+        <thead><tr><th>الاسم</th><th>اليوم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>السبب</th><th>إجراء</th></tr></thead>
         <tbody id="attendanceTable"></tbody>
     </table>
 </div>
@@ -81,21 +82,19 @@
     window.registerAttendance = async () => {
         const code = document.getElementById('empCode').value;
         const date = document.getElementById('dateSelector').value;
+        const day = new Date(date).toLocaleDateString('ar-EG', {weekday: 'long'});
         const status = document.getElementById('status').value;
         const time = document.getElementById('customTime').value;
+        const reason = document.getElementById('reason').value;
 
         const q = query(collection(db, "attendance"), where("empCode", "==", code), where("date", "==", date));
         const check = await getDocs(q);
-        if (!check.empty) { alert("هذا الموظف مسجل بالفعل!"); return; }
+        if (!check.empty) { alert("الموظف مسجل بالفعل!"); return; }
 
         const empSnap = await getDoc(doc(db, "employees", code));
         if (!empSnap.exists()) { alert("الكود غير موجود"); return; }
 
-        let finalStatus = status;
-        const [h, m] = time.split(':').map(Number);
-        if (status === "حاضر" && (h > 8 || (h === 8 && m > 5))) finalStatus = "متأخر";
-
-        await addDoc(collection(db, "attendance"), { empCode: code, name: empSnap.data().name, status: finalStatus, time, date });
+        await addDoc(collection(db, "attendance"), { empCode: code, name: empSnap.data().name, status, time, date, day, reason });
         alert("تم التسجيل");
     };
 
@@ -107,7 +106,7 @@
             snap.forEach(d => {
                 let data = d.data();
                 if(stats.hasOwnProperty(data.status)) stats[data.status]++;
-                rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td>
+                rows += `<tr><td>${data.name}</td><td>${data.day}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td><td>${data.reason || ''}</td>
                 <td><button class="btn-del" onclick="deleteAtt('${d.id}')">حذف</button></td></tr>`;
             });
             document.getElementById('attendanceTable').innerHTML = rows;
@@ -123,10 +122,19 @@
     };
 
     window.exportExcel = () => {
-        let content = `<h1>${document.getElementById('dirName').value} - ${document.getElementById('schName').value}</h1>` + document.getElementById('mainTable').outerHTML;
+        let content = `<h1>المديرية العامة لتربية القادسية - تربية الحمزة - اعدادية النجدين للبنين</h1>` + document.getElementById('mainTable').outerHTML;
         let a = document.createElement('a');
         a.href = 'data:application/vnd.ms-excel,' + encodeURIComponent(content);
         a.download = 'تقرير_' + document.getElementById('dateSelector').value + '.xls';
+        a.click();
+    };
+
+    window.backupData = async () => {
+        const snap = await getDocs(collection(db, "attendance"));
+        let data = []; snap.forEach(d => data.push(d.data()));
+        const a = document.createElement('a');
+        a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(data));
+        a.download = "backup_" + new Date().toLocaleDateString() + ".json";
         a.click();
     };
 
