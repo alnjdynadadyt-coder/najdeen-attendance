@@ -29,6 +29,8 @@
     <input type="date" id="dateSelector" onchange="renderTable()">
     <button onclick="exportExcel()" style="background:green; color:white;">تصدير Excel</button>
     <button onclick="backupData()" style="background:#6c757d; color:white;">نسخة احتياطية (JSON)</button>
+    <button onclick="document.getElementById('importFile').click()" style="background:#ff9800; color:white;">استيراد نسخة (JSON)</button>
+    <input type="file" id="importFile" style="display:none" onchange="importData(event)">
     
     <div class="stats-bar" style="margin-top: 20px;">
         <div class="stat-card" style="background:#007bff">حاضر: <span id="s_حاضر">0</span></div>
@@ -113,7 +115,6 @@
         alert("تم التسجيل");
     };
 
-    // وظيفة التقرير المتقدم
     window.generateAdvancedReport = async () => {
         const empCode = document.getElementById('advEmpCode').value;
         const start = document.getElementById('startDate').value;
@@ -129,6 +130,20 @@
             }
         });
         document.getElementById('advReportBody').innerHTML = rows;
+    };
+
+    window.importData = (event) => {
+        const file = event.target.files[0];
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const data = JSON.parse(e.target.result);
+            if(confirm("هل أنت متأكد؟ سيتم إضافة السجلات المستوردة إلى قاعدة البيانات الحالية.")) {
+                for(let item of data) { await addDoc(collection(db, "attendance"), item); }
+                alert("تمت استعادة البيانات بنجاح!");
+                renderTable();
+            }
+        };
+        reader.readAsText(file);
     };
 
     window.deleteAtt = (id) => deleteDoc(doc(db, 'attendance', id));
