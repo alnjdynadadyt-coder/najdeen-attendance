@@ -30,7 +30,13 @@
     <button onclick="exportExcel()" style="background:green; color:white;">تصدير Excel</button>
     <button onclick="backupData()" style="background:#6c757d; color:white;">نسخة احتياطية (JSON)</button>
     <button onclick="document.getElementById('importFile').click()" style="background:#ff9800; color:white;">استيراد نسخة (JSON)</button>
+    <button onclick="checkAttendanceStatus()" style="background:#dc3545; color:white;">كشف غير المسجلين</button>
     <input type="file" id="importFile" style="display:none" onchange="importData(event)">
+    
+    <div id="missingReport" class="container" style="display:none; border:2px solid red; margin-top:10px;">
+        <h3>قائمة من لم يسجل حضوره اليوم:</h3>
+        <ul id="missingList" style="color:red; font-weight:bold;"></ul>
+    </div>
     
     <div class="stats-bar" style="margin-top: 20px;">
         <div class="stat-card" style="background:#007bff">حاضر: <span id="s_حاضر">0</span></div>
@@ -42,6 +48,11 @@
     <hr>
     <h3>تسجيل الحضور</h3>
     <div class="input-group">
+        <select id="filterType" onchange="renderTable()">
+            <option value="الكل">عرض الكل</option>
+            <option value="مدرس">مدرس</option>
+            <option value="موظف">موظف</option>
+        </select>
         <input type="text" id="empCode" placeholder="كود الموظف">
         <select id="status"><option>حاضر</option><option>متأخر</option><option>مجاز</option><option>غائب</option></select>
         <input type="text" id="reason" placeholder="سبب الغياب/الملاحظة">
@@ -94,25 +105,43 @@
     document.getElementById('dateSelector').valueAsDate = new Date();
     document.getElementById('customTime').value = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit', hour12: false});
 
+    // كشف غير المسجلين
+    window.checkAttendanceStatus = async () => {
+        const date = document.getElementById('dateSelector').value;
+        const allEmployees = await getDocs(collection(db, "employees"));
+        const todayAttendance = await getDocs(query(collection(db, "attendance"), where("date", "==", date)));
+        let registeredCodes = [];
+        todayAttendance.forEach(d => registeredCodes.push(d.data().empCode));
+        let missingList = document.getElementById('missingList');
+        missingList.innerHTML = "";
+        document.getElementById('missingReport').style.display = "block";
+        allEmployees.forEach(d => {
+            if (!registeredCodes.includes(d.id)) {
+                missingList.innerHTML += `<li>${d.data().name} (كود: ${d.id})</li>`;
+            }
+        });
+    };
+
     window.registerAttendance = async () => {
         const code = document.getElementById('empCode').value;
         const date = document.getElementById('dateSelector').value;
         const statusRaw = document.getElementById('status').value;
         const timeInput = document.getElementById('customTime').value;
         const reason = document.getElementById('reason').value;
-
+        const empSnap = await getDoc(doc(db, "employees", code));
+        
+        if (!empSnap.exists()) { alert("الكود غير موجود"); return; }
+        
         let status = statusRaw;
         if(status === "حاضر" && timeInput > "08:05") status = "متأخر";
         const time = (status === "غائب" || status === "مجاز") ? "-" : timeInput;
         const day = new Date(date).toLocaleDateString('ar-EG', {weekday: 'long'});
+        const type = empSnap.data().type || 'موظف';
 
         const q = query(collection(db, "attendance"), where("empCode", "==", code), where("date", "==", date));
         if (!(await getDocs(q)).empty) { alert("الموظف مسجل بالفعل لهذا اليوم!"); return; }
 
-        const empSnap = await getDoc(doc(db, "employees", code));
-        if (!empSnap.exists()) { alert("الكود غير موجود"); return; }
-
-        await addDoc(collection(db, "attendance"), { empCode: code, name: empSnap.data().name, status, time, date, day, reason });
+        await addDoc(collection(db, "attendance"), { empCode: code, name: empSnap.data().name, status, time, date, day, reason, type });
         alert("تم التسجيل");
     };
 
@@ -132,6 +161,24 @@
         });
         document.getElementById('employeesTable').innerHTML = rows;
     });
+
+    window.renderTable = () => {
+        const date = document.getElementById('dateSelector').value;
+        const filter = document.getElementById('filterType').value;
+        onSnapshot(query(collection(db, "attendance"), where("date", "==", date)), snap => {
+            let rows = "", stats = {حاضر:0, متأخر:0, مجاز:0, غائب:0};
+            snap.forEach(d => {
+                let data = d.data();
+                if(filter === "الكل" || data.type === filter) {
+                    if(stats.hasOwnProperty(data.status)) stats[data.status]++;
+                    rows += `<tr><td>${data.name}</td><td>${data.day}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td><td>${data.reason || ''}</td>
+                    <td><button class="btn-del" onclick="deleteDoc(doc(db, 'attendance', '${d.id}'))">حذف</button></td></tr>`;
+                }
+            });
+            document.getElementById('attendanceTable').innerHTML = rows;
+            for(let k in stats) document.getElementById('s_'+k).innerText = stats[k];
+        });
+    };
 
     window.generateAdvancedReport = async () => {
         const empCode = document.getElementById('advEmpCode').value;
@@ -162,23 +209,6 @@
             }
         };
         reader.readAsText(file);
-    };
-
-    window.deleteAtt = (id) => deleteDoc(doc(db, 'attendance', id));
-
-    window.renderTable = () => {
-        const date = document.getElementById('dateSelector').value;
-        onSnapshot(query(collection(db, "attendance"), where("date", "==", date)), snap => {
-            let rows = "", stats = {حاضر:0, متأخر:0, مجاز:0, غائب:0};
-            snap.forEach(d => {
-                let data = d.data();
-                if(stats.hasOwnProperty(data.status)) stats[data.status]++;
-                rows += `<tr><td>${data.name}</td><td>${data.day}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td><td>${data.reason || ''}</td>
-                <td><button class="btn-del" onclick="deleteAtt('${d.id}')">حذف</button></td></tr>`;
-            });
-            document.getElementById('attendanceTable').innerHTML = rows;
-            for(let k in stats) document.getElementById('s_'+k).innerText = stats[k];
-        });
     };
 
     window.exportExcel = () => {
