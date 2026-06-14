@@ -2,10 +2,10 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>إدارة الحضور - المنجد المتكامل</title>
+    <title>إدارة الحضور - النظام الشامل</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #eef2f3; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .input-group { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; background: #f8f9fa; padding: 15px; border-radius: 8px; }
         input, select, button { padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -16,25 +16,30 @@
 </head>
 <body>
 
-<div class="container" style="text-align:center;">
-    <h2>المديرية العامة لتربية القادسية - تربية الحمزة</h2>
-    <h3>اعدادية النجدين للبنين</h3>
+<div class="container">
+    <h2>التقارير والإدارة</h2>
+    <div class="input-group">
+        <input type="date" id="repDate">
+        <input type="text" id="repEmpCode" placeholder="كود الموظف (اختياري)">
+        <button onclick="generateReport()" style="background:#007bff; color:white;">عرض التقرير</button>
+        <button onclick="exportExcel()" style="background:green; color:white;">تصدير Excel</button>
+        <button onclick="backupData()" style="background:#6c757d; color:white;">نسخة احتياطية (JSON)</button>
+    </div>
+    <table id="reportTable">
+        <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>السبب</th><th>إجراء</th></tr></thead>
+        <tbody id="reportBody"></tbody>
+    </table>
 </div>
 
 <div class="container">
-    <h3>تسجيل الحضور</h3>
+    <h3>تسجيل حضور جديد</h3>
     <div class="input-group">
         <input type="text" id="empCode" placeholder="كود الموظف">
         <select id="status"><option>حاضر</option><option>متأخر</option><option>مجاز</option><option>غائب</option></select>
-        <input type="text" id="reason" placeholder="سبب الغياب">
+        <input type="text" id="reason" placeholder="السبب">
         <input type="time" id="customTime">
         <button onclick="registerAttendance()" style="background:#007bff; color:white;">تسجيل</button>
     </div>
-    
-    <table id="mainTable">
-        <thead><tr><th>الاسم</th><th>اليوم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>السبب</th><th>إجراء</th></tr></thead>
-        <tbody id="attendanceTable"></tbody>
-    </table>
 </div>
 
 <div class="container">
@@ -49,7 +54,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, collection, addDoc, onSnapshot, setDoc, deleteDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+    import { getFirestore, doc, collection, addDoc, onSnapshot, setDoc, deleteDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
     const db = getFirestore(initializeApp({
         apiKey: "AIzaSyDHcLPo-oAQmJr4O6M0NEAN32eAvUBo9LU",
@@ -59,54 +64,67 @@
         appId: "1:614493844351:web:8efb02501b86b6192de04a"
     }));
 
-    // ضبط الوقت الحالي تلقائياً
+    // ضبط الوقت
     document.getElementById('customTime').value = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit', hour12: false});
 
     window.registerAttendance = async () => {
         const code = document.getElementById('empCode').value;
-        const statusInput = document.getElementById('status').value;
-        const timeInput = document.getElementById('customTime').value;
-        const reason = document.getElementById('reason').value;
+        const statusIn = document.getElementById('status').value;
+        const time = document.getElementById('customTime').value;
         const date = new Date().toISOString().split('T')[0];
-        const day = new Date().toLocaleDateString('ar-EG', {weekday: 'long'});
+        
+        let status = statusIn;
+        if(status === "حاضر" && time > "08:05") status = "متأخر";
+        const finalTime = (status === "غائب" || status === "مجاز") ? "-" : time;
 
-        // منطق متأخر (أكبر من 08:05)
-        let finalStatus = statusInput;
-        if (statusInput === "حاضر" && timeInput > "08:05") { finalStatus = "متأخر"; }
-        const finalTime = (finalStatus === "غائب" || finalStatus === "مجاز") ? "-" : timeInput;
+        const q = query(collection(db, "attendance"), where("empCode", "==", code), where("date", "==", date));
+        if(!(await getDocs(q)).empty) { alert("مسجل مسبقاً!"); return; }
 
-        const empSnap = await getDoc(doc(db, "employees", code));
-        if (!empSnap.exists()) { alert("الكود غير موجود"); return; }
-
-        await addDoc(collection(db, "attendance"), { empCode: code, name: empSnap.data().name, status: finalStatus, time: finalTime, date, day, reason });
+        await addDoc(collection(db, "attendance"), { empCode: code, date, time: finalTime, status, reason: document.getElementById('reason').value });
         alert("تم التسجيل");
     };
 
-    // عرض الحضور
-    onSnapshot(query(collection(db, "attendance"), where("date", "==", new Date().toISOString().split('T')[0])), snap => {
-        let rows = "";
+    window.generateReport = async () => {
+        const date = document.getElementById('repDate').value;
+        const code = document.getElementById('repEmpCode').value;
+        let q = collection(db, "attendance");
+        const snap = await getDocs(q);
+        let html = "";
         snap.forEach(d => {
             let data = d.data();
-            rows += `<tr><td>${data.name}</td><td>${data.day}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td><td>${data.reason || ''}</td>
-            <td><button class="btn-del" onclick="deleteDoc(doc(db, 'attendance', '${d.id}'))">حذف</button></td></tr>`;
+            if((!date || data.date === date) && (!code || data.empCode === code)) {
+                html += `<tr><td>${data.empCode}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td><td>${data.reason || ''}</td>
+                <td><button class="btn-del" onclick="deleteDoc(doc(db, 'attendance', '${d.id}'))">حذف</button></td></tr>`;
+            }
         });
-        document.getElementById('attendanceTable').innerHTML = rows;
-    });
+        document.getElementById('reportBody').innerHTML = html;
+    };
 
-    // إدارة الموظفين
     window.addEmployee = async () => {
-        const code = document.getElementById('newEmpCode').value;
-        const name = document.getElementById('newEmpName').value;
-        await setDoc(doc(db, "employees", code), { name });
+        await setDoc(doc(db, "employees", document.getElementById('newEmpCode').value), { name: document.getElementById('newEmpName').value });
     };
 
     onSnapshot(collection(db, "employees"), snap => {
         let rows = "";
         snap.forEach(d => {
-            rows += `<tr><td>${d.id}</td><td>${d.data().name}</td><td><button onclick="document.getElementById('newEmpCode').value='${d.id}'; document.getElementById('newEmpName').value='${d.data().name}';">تعديل</button> <button class="btn-del" onclick="deleteDoc(doc(db, 'employees', '${d.id}'))">حذف</button></td></tr>`;
+            rows += `<tr><td>${d.id}</td><td>${d.data().name}</td><td><button class="btn-del" onclick="deleteDoc(doc(db, 'employees', '${d.id}'))">حذف</button></td></tr>`;
         });
         document.getElementById('employeesTable').innerHTML = rows;
     });
+
+    window.exportExcel = () => {
+        let a = document.createElement('a');
+        a.href = 'data:application/vnd.ms-excel,' + encodeURIComponent(document.getElementById('reportTable').outerHTML);
+        a.download = 'تقرير.xls'; a.click();
+    };
+
+    window.backupData = async () => {
+        const snap = await getDocs(collection(db, "attendance"));
+        let d = []; snap.forEach(x => d.push(x.data()));
+        const a = document.createElement('a');
+        a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(d));
+        a.download = "backup.json"; a.click();
+    };
 </script>
 </body>
 </html>
