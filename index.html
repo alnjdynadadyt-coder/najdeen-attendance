@@ -57,9 +57,9 @@
 <div class="container adv-report-container">
     <h3>تقارير متقدمة (موظف / فترة)</h3>
     <div class="input-group">
-        <input type="text" id="advEmpCode" placeholder="كود الموظف (للتقرير الفردي)">
-        <input type="date" id="startDate" title="من تاريخ">
-        <input type="date" id="endDate" title="إلى تاريخ">
+        <input type="text" id="advEmpCode" placeholder="كود الموظف">
+        <input type="date" id="startDate">
+        <input type="date" id="endDate">
         <button onclick="generateAdvancedReport()" style="background:#28a745; color:white;">عرض التقرير المخصص</button>
     </div>
     <table id="advReportTable">
@@ -69,13 +69,14 @@
 </div>
 
 <div class="container">
-    <h3>إدارة الموظفين</h3>
+    <h3>إدارة الموظفين (مع التصنيف)</h3>
     <div class="input-group">
         <input type="text" id="newEmpCode" placeholder="الكود">
         <input type="text" id="newEmpName" placeholder="الاسم">
+        <select id="newEmpType"><option value="مدرس">مدرس</option><option value="موظف">موظف</option></select>
         <button onclick="addEmployee()" style="background:#6c757d; color:white;">حفظ / تعديل</button>
     </div>
-    <table><thead><tr><th>الكود</th><th>الاسم</th><th>إجراء</th></tr></thead><tbody id="employeesTable"></tbody></table>
+    <table><thead><tr><th>الكود</th><th>الاسم</th><th>التصنيف</th><th>إجراء</th></tr></thead><tbody id="employeesTable"></tbody></table>
 </div>
 
 <script type="module">
@@ -115,6 +116,23 @@
         alert("تم التسجيل");
     };
 
+    window.addEmployee = async () => {
+        const code = document.getElementById('newEmpCode').value;
+        const name = document.getElementById('newEmpName').value;
+        const type = document.getElementById('newEmpType').value;
+        if(code && name) await setDoc(doc(db, "employees", code), { name, type });
+    };
+
+    onSnapshot(collection(db, "employees"), snap => {
+        let rows = "";
+        snap.forEach(d => {
+            let data = d.data();
+            rows += `<tr><td>${d.id}</td><td>${data.name}</td><td>${data.type || 'موظف'}</td>
+            <td><button onclick="document.getElementById('newEmpCode').value='${d.id}'; document.getElementById('newEmpName').value='${data.name}';">تعديل</button> <button class="btn-del" onclick="deleteDoc(doc(db, 'employees', '${d.id}'))">حذف</button></td></tr>`;
+        });
+        document.getElementById('employeesTable').innerHTML = rows;
+    });
+
     window.generateAdvancedReport = async () => {
         const empCode = document.getElementById('advEmpCode').value;
         const start = document.getElementById('startDate').value;
@@ -137,9 +155,9 @@
         const reader = new FileReader();
         reader.onload = async (e) => {
             const data = JSON.parse(e.target.result);
-            if(confirm("هل أنت متأكد؟ سيتم إضافة السجلات المستوردة إلى قاعدة البيانات الحالية.")) {
+            if(confirm("هل أنت متأكد؟ سيتم إضافة السجلات.")) {
                 for(let item of data) { await addDoc(collection(db, "attendance"), item); }
-                alert("تمت استعادة البيانات بنجاح!");
+                alert("تمت الاستعادة بنجاح!");
                 renderTable();
             }
         };
@@ -147,7 +165,6 @@
     };
 
     window.deleteAtt = (id) => deleteDoc(doc(db, 'attendance', id));
-    window.deleteEmp = (id) => deleteDoc(doc(db, 'employees', id));
 
     window.renderTable = () => {
         const date = document.getElementById('dateSelector').value;
@@ -162,12 +179,6 @@
             document.getElementById('attendanceTable').innerHTML = rows;
             for(let k in stats) document.getElementById('s_'+k).innerText = stats[k];
         });
-    };
-
-    window.addEmployee = async () => {
-        const code = document.getElementById('newEmpCode').value;
-        const name = document.getElementById('newEmpName').value;
-        if(code && name) await setDoc(doc(db, "employees", code), { name });
     };
 
     window.exportExcel = () => {
@@ -186,14 +197,6 @@
         a.download = "backup_" + new Date().toLocaleDateString() + ".json";
         a.click();
     };
-
-    onSnapshot(collection(db, "employees"), snap => {
-        let rows = "";
-        snap.forEach(d => {
-            rows += `<tr><td>${d.id}</td><td>${d.data().name}</td><td><button onclick="document.getElementById('newEmpCode').value='${d.id}'; document.getElementById('newEmpName').value='${d.data().name}';">تعديل</button> <button class="btn-del" onclick="deleteEmp('${d.id}')">حذف</button></td></tr>`;
-        });
-        document.getElementById('employeesTable').innerHTML = rows;
-    });
 
     renderTable();
 </script>
