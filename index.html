@@ -14,6 +14,7 @@
         th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
         th { background-color: #007bff; color: white; }
         .btn-del { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+        .adv-report-container { background: #fff8e1; border: 2px solid #ffc107; padding: 20px; border-radius: 10px; margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -51,6 +52,20 @@
     </table>
 </div>
 
+<div class="container adv-report-container">
+    <h3>تقارير متقدمة (موظف / فترة)</h3>
+    <div class="input-group">
+        <input type="text" id="advEmpCode" placeholder="كود الموظف (للتقرير الفردي)">
+        <input type="date" id="startDate" title="من تاريخ">
+        <input type="date" id="endDate" title="إلى تاريخ">
+        <button onclick="generateAdvancedReport()" style="background:#28a745; color:white;">عرض التقرير المخصص</button>
+    </div>
+    <table id="advReportTable">
+        <thead><tr><th>الاسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>السبب</th></tr></thead>
+        <tbody id="advReportBody"></tbody>
+    </table>
+</div>
+
 <div class="container">
     <h3>إدارة الموظفين</h3>
     <div class="input-group">
@@ -73,7 +88,6 @@
         appId: "1:614493844351:web:8efb02501b86b6192de04a"
     }));
 
-    // ضبط القيم التلقائية
     document.getElementById('dateSelector').valueAsDate = new Date();
     document.getElementById('customTime').value = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit', hour12: false});
 
@@ -84,11 +98,8 @@
         const timeInput = document.getElementById('customTime').value;
         const reason = document.getElementById('reason').value;
 
-        // منطق الحالة الذكي
         let status = statusRaw;
         if(status === "حاضر" && timeInput > "08:05") status = "متأخر";
-        
-        // إخفاء الوقت إذا كان غائب أو مجاز
         const time = (status === "غائب" || status === "مجاز") ? "-" : timeInput;
         const day = new Date(date).toLocaleDateString('ar-EG', {weekday: 'long'});
 
@@ -100,6 +111,24 @@
 
         await addDoc(collection(db, "attendance"), { empCode: code, name: empSnap.data().name, status, time, date, day, reason });
         alert("تم التسجيل");
+    };
+
+    // وظيفة التقرير المتقدم
+    window.generateAdvancedReport = async () => {
+        const empCode = document.getElementById('advEmpCode').value;
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        const snap = await getDocs(collection(db, "attendance"));
+        let rows = "";
+        snap.forEach(d => {
+            let data = d.data();
+            let dateMatch = (!start || data.date >= start) && (!end || data.date <= end);
+            let empMatch = (!empCode || data.empCode === empCode);
+            if (dateMatch && empMatch) {
+                rows += `<tr><td>${data.name}</td><td>${data.date}</td><td>${data.time}</td><td>${data.status}</td><td>${data.reason || ''}</td></tr>`;
+            }
+        });
+        document.getElementById('advReportBody').innerHTML = rows;
     };
 
     window.deleteAtt = (id) => deleteDoc(doc(db, 'attendance', id));
