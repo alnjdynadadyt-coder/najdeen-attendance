@@ -6,7 +6,7 @@
     <style>
         body { font-family: sans-serif; padding: 15px; background: #f4f7f6; }
         .container { max-width: 950px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .input-group { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eee; }
+        .input-group { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; background: #f8f9fa; padding: 15px; border-radius: 8px; }
         input, select, button { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
@@ -21,31 +21,39 @@
     <h3>اعدادية النجدين للبنين</h3>
     
     <div class="input-group">
-        <input type="date" id="dateSelector" onchange="renderAttendance()">
-        <input type="text" id="reason" placeholder="سبب الغياب/الإجازة">
-        <select id="status"><option>حاضر</option><option>متأخر</option><option>مجاز</option><option>غائب</option></select>
-        <button onclick="registerAttendance()" style="background:#3498db; color:white;">تسجيل</button>
-        <button onclick="backupData()" style="background:#27ae60; color:white;">نسخة احتياطية</button>
+        <input type="date" id="filterDate" onchange="renderTable()">
+        <button onclick="exportExcel()" style="background:#27ae60; color:white;">تصدير Excel</button>
+        <button onclick="backupData()" style="background:#2980b9; color:white;">نسخة احتياطية</button>
     </div>
 
-    <div style="display:flex; gap:10px; margin-bottom: 15px;">
+    <div style="display:flex; gap:15px; margin-bottom: 15px; font-weight: bold;">
         <div>حاضر: <span id="s_حاضر">0</span></div>
         <div>متأخر: <span id="s_متأخر">0</span></div>
         <div>مجاز: <span id="s_مجاز">0</span></div>
         <div>غائب: <span id="s_غائب">0</span></div>
     </div>
 
-    <table id="attendanceTable">
+    <table id="mainTable">
         <thead><tr><th>الاسم</th><th>اليوم</th><th>التاريخ</th><th>الحالة</th><th>السبب</th><th>إجراء</th></tr></thead>
-        <tbody></tbody>
+        <tbody id="attendanceTable"></tbody>
     </table>
+</div>
+
+<div class="container">
+    <h3>تسجيل جديد</h3>
+    <div class="input-group">
+        <input type="text" id="empCode" placeholder="كود الموظف">
+        <input type="text" id="reason" placeholder="السبب/الملاحظة">
+        <select id="status"><option>حاضر</option><option>متأخر</option><option>مجاز</option><option>غائب</option></select>
+        <button onclick="registerAttendance()" style="background:#3498db; color:white;">تسجيل</button>
+    </div>
 </div>
 
 <div class="container">
     <h3>إدارة الموظفين</h3>
     <div class="input-group">
-        <input type="text" id="empCode" placeholder="الكود">
-        <input type="text" id="empName" placeholder="الاسم">
+        <input type="text" id="mCode" placeholder="الكود">
+        <input type="text" id="mName" placeholder="الاسم">
         <button onclick="saveEmployee()" style="background:#2c3e50; color:white;">حفظ / تعديل</button>
     </div>
     <table><thead><tr><th>الكود</th><th>الاسم</th><th>إجراء</th></tr></thead><tbody id="employeesTable"></tbody></table>
@@ -63,25 +71,24 @@
         appId: "1:614493844351:web:8efb02501b86b6192de04a"
     }));
 
-    document.getElementById('dateSelector').valueAsDate = new Date();
+    document.getElementById('filterDate').valueAsDate = new Date();
 
     window.registerAttendance = async () => {
-        const code = prompt("أدخل كود الموظف:");
-        if (!code) return;
-        const date = document.getElementById('dateSelector').value;
+        const code = document.getElementById('empCode').value;
+        const date = document.getElementById('filterDate').value;
         const day = new Date(date).toLocaleDateString('ar-EG', {weekday: 'long'});
         const status = document.getElementById('status').value;
         const reason = document.getElementById('reason').value;
 
         const empSnap = await getDoc(doc(db, "employees", code));
-        if (!empSnap.exists()) { alert("كود غير موجود"); return; }
+        if (!empSnap.exists()) { alert("كود الموظف غير موجود"); return; }
         
         await addDoc(collection(db, "attendance"), { empCode: code, name: empSnap.data().name, status, reason, date, day });
         alert("تم التسجيل");
     };
 
-    window.renderAttendance = () => {
-        const date = document.getElementById('dateSelector').value;
+    window.renderTable = () => {
+        const date = document.getElementById('filterDate').value;
         const q = query(collection(db, "attendance"), where("date", "==", date));
         onSnapshot(q, snap => {
             let html = "", stats = {حاضر:0, متأخر:0, مجاز:0, غائب:0};
@@ -91,17 +98,15 @@
                 html += `<tr><td>${data.name}</td><td>${data.day}</td><td>${data.date}</td><td>${data.status}</td><td>${data.reason||''}</td>
                 <td><button class="btn-red" onclick="deleteDoc(doc(db, 'attendance', '${d.id}'))">حذف</button></td></tr>`;
             });
-            document.querySelector('#attendanceTable tbody').innerHTML = html;
+            document.getElementById('attendanceTable').innerHTML = html;
             for(let s in stats) document.getElementById('s_'+s).innerText = stats[s];
         });
     };
 
     window.saveEmployee = async () => {
-        const code = document.getElementById('empCode').value;
-        const name = document.getElementById('empName').value;
-        if(!code || !name) return;
-        await setDoc(doc(db, "employees", code), { name });
-        alert("تم الحفظ");
+        const code = document.getElementById('mCode').value;
+        const name = document.getElementById('mName').value;
+        if(code && name) { await setDoc(doc(db, "employees", code), { name }); alert("تم الحفظ"); }
     };
 
     onSnapshot(collection(db, "employees"), snap => {
@@ -113,6 +118,12 @@
         document.getElementById('employeesTable').innerHTML = html;
     });
 
+    window.exportExcel = () => {
+        let a = document.createElement('a');
+        a.href = 'data:application/vnd.ms-excel,' + encodeURIComponent(document.getElementById('mainTable').outerHTML);
+        a.download = "تقرير.xls"; a.click();
+    };
+
     window.backupData = async () => {
         const snap = await getDocs(collection(db, "attendance"));
         let data = []; snap.forEach(d => data.push(d.data()));
@@ -121,7 +132,7 @@
         a.download = "backup.json"; a.click();
     };
 
-    renderAttendance();
+    renderTable();
 </script>
 </body>
 </html>
